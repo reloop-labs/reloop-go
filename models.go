@@ -71,9 +71,12 @@ type DeleteApiKeyResponse struct {
 }
 
 type CreateApiKeyParams struct {
-	Name string `json:"name"`
+	Name                string `json:"name"`
+	Enabled             *bool  `json:"enabled,omitempty"`
+	RateLimitEnabled    *bool  `json:"rateLimitEnabled,omitempty"`
 }
 
 type UpdateApiKeyParams struct {
-	Name string `json:"name"`
+	Name    string `json:"name,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
 }
