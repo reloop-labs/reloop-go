@@ -1,0 +1,13 @@
+# Go binaries
+/reloop-go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE and OS
+.DS_Store
+.idea/
+.vscode/
+*.log
