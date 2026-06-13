@@ -45,6 +45,16 @@ apiKey, err := client.ApiKeys.Create(reloop.CreateApiKeyParams{
     Enabled:          reloop.Bool(true),
     RateLimitEnabled: reloop.Bool(true),
 })
+
+keys, err := client.ApiKeys.List(&reloop.ApiKeyListParams{
+    Page:    reloop.Int(1),
+    Limit:   reloop.Int(10),
+    Enabled: reloop.Bool(true),
+})
+
+_, err = client.ApiKeys.Rotate("key_123456789")
+_, err = client.ApiKeys.Pause("key_123456789")
+_, err = client.ApiKeys.Enable("key_123456789")
 ```
 
 ## Contacts
@@ -62,4 +72,39 @@ group, err := client.Contacts.CreateGroup(map[string]interface{}{
 _, err = client.Contacts.Groups.AddContact("grp_123456789", map[string]interface{}{
     "contact_id": "cont_123456789",
 })
+```
+
+## Domains
+
+```go
+domain, err := client.Domain.Create(reloop.CreateDomainParams{
+    Domain:           "send.example.com",
+    CustomReturnPath: reloop.String("inbound"),
+    ClickTracking:    reloop.Bool(true),
+    OpenTracking:     reloop.Bool(true),
+    TLS:              reloop.DomainTLS(reloop.DomainTLSOpportunistic),
+    SendingEmail:     reloop.Bool(true),
+    ReceivingEmail:   reloop.Bool(true),
+})
+
+domains, err := client.Domain.List(&reloop.ListDomainsParams{
+    Page:  reloop.Int(1),
+    Limit: reloop.Int(10),
+})
+
+one, err := client.Domain.Get("domain_123456789")
+
+_, err = client.Domain.Update("domain_123456789", reloop.UpdateDomainParams{
+    ClickTracking: reloop.Bool(false),
+})
+
+status, err := client.Domain.Verify("domain_123456789")
+
+_, err = client.Domain.ForwardDNS("domain_123456789", reloop.ForwardDNSParams{
+    Email: "admin@example.com",
+})
+
+nameservers, err := client.Domain.GetNameservers("domain_123456789")
+
+_, err = client.Domain.Delete("domain_123456789")
 ```

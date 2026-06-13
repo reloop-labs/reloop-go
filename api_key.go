@@ -104,3 +104,7 @@ func (s *ApiKeysService) Disable(id string) (*ApiKey, error) {
 	}
 	return &response, nil
 }
+
+func (s *ApiKeysService) Pause(id string) (*ApiKey, error) {
+	return s.Disable(id)
+}

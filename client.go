@@ -14,9 +14,10 @@ type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
 
-	ApiKeys        *ApiKeysService
-	APIKeyService  *ApiKeysService
-	Contacts       *ContactsService
+	ApiKeys       *ApiKeysService
+	APIKeyService *ApiKeysService
+	Contacts      *ContactsService
+	Domain        *DomainService
 }
 
 type ClientOptions struct {
@@ -45,6 +46,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	c.ApiKeys = &ApiKeysService{client: c}
 	c.APIKeyService = c.ApiKeys
 	c.Contacts = newContactsService(c)
+	c.Domain = &DomainService{client: c}
 
 	return c, nil
 }

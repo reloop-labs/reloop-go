@@ -34,6 +34,10 @@ func String(value string) *string {
 	return &value
 }
 
+func DomainTLS(value DomainTLSMode) *DomainTLSMode {
+	return &value
+}
+
 func forRequest(parameters map[string]interface{}) map[string]interface{} {
 	normalized := make(map[string]interface{}, len(parameters))
 
