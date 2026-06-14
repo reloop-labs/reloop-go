@@ -18,6 +18,7 @@ type Client struct {
 	APIKeyService *ApiKeysService
 	Contacts      *ContactsService
 	Domain        *DomainService
+	Mail          *MailService
 }
 
 type ClientOptions struct {
@@ -47,6 +48,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	c.APIKeyService = c.ApiKeys
 	c.Contacts = newContactsService(c)
 	c.Domain = &DomainService{client: c}
+	c.Mail = &MailService{client: c}
 
 	return c, nil
 }

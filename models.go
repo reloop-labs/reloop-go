@@ -202,3 +202,38 @@ type DomainNameserversResponse struct {
 	DNSProvider *string  `json:"dnsProvider"`
 	Event       string   `json:"event"`
 }
+
+type SendMailTag struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type SendMailTemplate struct {
+	ID        string                 `json:"id"`
+	Variables map[string]interface{} `json:"variables,omitempty"`
+}
+
+type SendMailParams struct {
+	From        string            `json:"from"`
+	To          interface{}       `json:"to"`
+	Subject     string            `json:"subject"`
+	Cc          interface{}       `json:"cc,omitempty"`
+	Bcc         interface{}       `json:"bcc,omitempty"`
+	Text        *string           `json:"text,omitempty"`
+	HTML        *string           `json:"html,omitempty"`
+	ReplyTo     interface{}       `json:"reply_to,omitempty"`
+	ScheduledAt *string           `json:"scheduled_at,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	ChannelID   *string           `json:"channel_id,omitempty"`
+	Tags        []SendMailTag     `json:"tags,omitempty"`
+	Template    *SendMailTemplate `json:"template,omitempty"`
+	ThreadID    *string           `json:"thread_id,omitempty"`
+}
+
+type SendMailResponse struct {
+	Success   bool   `json:"success"`
+	MessageID string `json:"messageId"`
+	Status    string `json:"status"`
+	Timestamp string `json:"timestamp"`
+	ID        string `json:"id"`
+}
