@@ -16,6 +16,8 @@ This guide applies to all official Reloop language SDKs:
 
 The same guide is maintained in every Reloop SDK repository.
 
+All SDKs are licensed under the **Apache License 2.0** with additional use restrictions from Reloop Labs. See [`LICENSE`](./LICENSE) in each repository (same text as the [main Reloop project](https://github.com/reloop-labs/reloop/blob/main/LICENSE)).
+
 ---
 
 ## Contributing

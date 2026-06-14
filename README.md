@@ -44,3 +44,7 @@ fmt.Println(result.MessageID, result.ID)
 ```
 
 More examples and optional fields: [reloop.sh/docs](https://reloop.sh/docs)
+
+## License
+
+Licensed under the [Apache License 2.0](./LICENSE) with additional use restrictions from Reloop Labs (same as the [Reloop project](https://github.com/reloop-labs/reloop/blob/main/LICENSE)).
