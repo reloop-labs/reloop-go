@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	reloop "github.com/reloop-labs/reloop-go"
+	reloop "github.com/reloop-labs/reloop-go/v2"
 )
 
 func TestApiKeyCreateUsesApiPrefix(t *testing.T) {

@@ -1,6 +1,6 @@
 # Contributing to the Reloop Go SDK
 
-Module: **`github.com/reloop-labs/reloop-go`**.
+Module: **`github.com/reloop-labs/reloop-go/v2`**.
 
 **License:** [Apache License 2.0](./LICENSE) with additional use restrictions from Reloop Labs.
 
@@ -56,15 +56,15 @@ go.mod
 
 ## Releasing
 
-Version: **`version.go`** → `const Version = "1.9.0"`.
+Version: **`version.go`** → `const Version = "2.0.0"`.
 
 ```bash
-git commit -am "chore: release v1.9.0"
+git commit -am "chore: release v2.0.0"
 git push origin main
-git tag v1.9.0
-git push origin v1.9.0
+git tag v2.0.0
+git push origin v2.0.0
 ```
 
 [`.github/workflows/release.yml`](./.github/workflows/release.yml) creates a GitHub Release with a source zip.
 
-Consumers install via: `go get github.com/reloop-labs/reloop-go@v1.9.0`
+Consumers install via: `go get github.com/reloop-labs/reloop-go/v2@v2.0.0`

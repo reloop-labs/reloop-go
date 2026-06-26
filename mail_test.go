@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	reloop "github.com/reloop-labs/reloop-go"
+	reloop "github.com/reloop-labs/reloop-go/v2"
 )
 
 func TestMailSendUsesSnakeCaseBody(t *testing.T) {

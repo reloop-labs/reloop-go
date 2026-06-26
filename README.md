@@ -12,14 +12,14 @@ For setup details and the full API reference, see [reloop.sh/docs](https://reloo
 ## Send email
 
 ```bash
-go get github.com/reloop-labs/reloop-go
+go get github.com/reloop-labs/reloop-go/v2
 ```
 
 ```go
 import (
     "fmt"
 
-    reloop "github.com/reloop-labs/reloop-go"
+    reloop "github.com/reloop-labs/reloop-go/v2"
 )
 
 client, err := reloop.NewClient(reloop.ClientOptions{
