@@ -1,89 +1,75 @@
-package reloop_test
+package reloop
 
 import (
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"reflect"
+	"sort"
 	"testing"
-
-	reloop "github.com/reloop-labs/reloop-go/v2"
 )
 
-func TestApiKeyCreateUsesApiPrefix(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/api-key/v1/" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !strings.Contains(string(body), `"name":"Production Key"`) {
-			t.Fatalf("unexpected body: %s", body)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":        "key_1",
-			"name":      "Production Key",
-			"key":       "rl_live_secret",
-			"enabled":   true,
-			"createdAt": "2026-01-01T00:00:00.000Z",
-			"updatedAt": "2026-01-01T00:00:00.000Z",
-			"object":    "api_key",
-			"event":     "evt_1",
-		})
+func TestAPIKeyCreateHappyPath(t *testing.T) {
+	var method, path string
+	var body map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path = r.Method, r.URL.Path
+		data, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(data, &body)
+		_ = json.NewEncoder(w).Encode(APIKeyWithKey{ID: "key_1", Key: "rl_secret", Object: "api_key"})
 	}))
-	defer server.Close()
+	defer srv.Close()
 
-	client, err := reloop.NewClient(reloop.ClientOptions{
-		APIKey:  "rl_test",
-		BaseURL: server.URL,
-	})
+	c, _ := NewClient(ClientOptions{APIKey: "rl_test", BaseURL: srv.URL})
+	res, err := c.APIKey.Create(CreateAPIKeyParams{Name: "prod"})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	key, err := client.ApiKeys.Create(reloop.CreateApiKeyParams{Name: "Production Key"})
-	if err != nil {
-		t.Fatal(err)
+	if method != "POST" || path != "/api/api-key/v1/" || body["name"] != "prod" {
+		t.Fatalf("mismatch method=%s path=%s body=%v", method, path, body)
 	}
-
-	if key.ID != "key_1" {
-		t.Fatalf("expected key_1, got %s", key.ID)
+	if res.Key != "rl_secret" {
+		t.Fatalf("key = %q", res.Key)
 	}
 }
 
-func TestApiKeyPauseUsesDisableRoute(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/api-key/v1/disable/key_1" {
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":      "key_1",
-			"enabled": false,
-			"object":  "api_key",
-			"event":   "evt_1",
-		})
-	}))
-	defer server.Close()
-
-	client, err := reloop.NewClient(reloop.ClientOptions{
-		APIKey:  "rl_test",
-		BaseURL: server.URL,
-	})
-	if err != nil {
-		t.Fatal(err)
+func TestAPIKeyValidationNoHTTP(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits++ }))
+	defer srv.Close()
+	c, _ := NewClient(ClientOptions{APIKey: "rl_test", BaseURL: srv.URL})
+	_, err := c.APIKey.Create(CreateAPIKeyParams{Name: ""})
+	if _, ok := err.(*ValidationError); !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
 	}
+	if hits != 0 {
+		t.Fatal("expected no HTTP")
+	}
+}
 
-	_, err = client.ApiKeys.Pause("key_1")
-	if err != nil {
-		t.Fatal(err)
+func TestAPIKeyAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "boom"})
+	}))
+	defer srv.Close()
+	c, _ := NewClient(ClientOptions{APIKey: "rl_test", BaseURL: srv.URL})
+	_, err := c.APIKey.Get("key_1")
+	if _, ok := err.(*APIError); !ok {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+}
+
+func TestAPIKeyServiceSurface(t *testing.T) {
+	methods := []string{}
+	typ := reflect.TypeOf(&APIKeyService{})
+	for i := 0; i < typ.NumMethod(); i++ {
+		methods = append(methods, typ.Method(i).Name)
+	}
+	sort.Strings(methods)
+	expected := []string{"Create", "Delete", "Disable", "Enable", "Get", "List", "Rotate", "Update"}
+	if !reflect.DeepEqual(methods, expected) {
+		t.Fatalf("surface = %v want %v", methods, expected)
 	}
 }

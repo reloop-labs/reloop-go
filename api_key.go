@@ -1,110 +1,227 @@
 package reloop
 
 import (
-	"fmt"
 	"net/url"
+	"strconv"
 )
 
-type ApiKeysService struct {
+// APIKeyService manages organization API keys.
+type APIKeyService struct {
 	client *Client
 }
 
-func (s *ApiKeysService) Create(params CreateApiKeyParams) (*ApiKeyWithKey, error) {
-	var response ApiKeyWithKey
-	err := s.client.request("POST", "/api/api-key/v1/", params, &response)
+// User is an API key creator.
+type User struct {
+	ID    string  `json:"id"`
+	Name  *string `json:"name"`
+	Image *string `json:"image"`
+	Email string  `json:"email"`
+}
+
+// APIKey is an API key resource.
+type APIKey struct {
+	ID                  string  `json:"id"`
+	Name                *string `json:"name"`
+	Start               *string `json:"start"`
+	Prefix              *string `json:"prefix"`
+	OrganizationID      string  `json:"organizationId"`
+	UserID              string  `json:"userId"`
+	RefillInterval      *int    `json:"refillInterval"`
+	RefillAmount        *int    `json:"refillAmount"`
+	LastRefillAt        *string `json:"lastRefillAt"`
+	Enabled             bool    `json:"enabled"`
+	RateLimitEnabled    bool    `json:"rateLimitEnabled"`
+	RateLimitTimeWindow int     `json:"rateLimitTimeWindow"`
+	RateLimitMax        int     `json:"rateLimitMax"`
+	RequestCount        int     `json:"requestCount"`
+	Remaining           *int    `json:"remaining"`
+	LastRequest         *string `json:"lastRequest"`
+	ExpiresAt           *string `json:"expiresAt"`
+	CreatedAt           string  `json:"createdAt"`
+	UpdatedAt           string  `json:"updatedAt"`
+	Permissions         *string `json:"permissions"`
+	Metadata            *string `json:"metadata"`
+	CreatedBy           *User   `json:"createdBy,omitempty"`
+	Object              string  `json:"object"`
+	Event               string  `json:"event"`
+}
+
+// APIKeyWithKey includes the raw secret (create/rotate).
+type APIKeyWithKey struct {
+	ID          string  `json:"id"`
+	Name        *string `json:"name"`
+	Key         string  `json:"key"`
+	Enabled     bool    `json:"enabled"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	Permissions *string `json:"permissions"`
+	Object      string  `json:"object"`
+	Event       string  `json:"event"`
+}
+
+// APIKeyListResponse is a paginated API key list.
+type APIKeyListResponse struct {
+	Object  string   `json:"object"`
+	APIKeys []APIKey `json:"apiKeys"`
+	Total   int      `json:"total"`
+	Page    int      `json:"page"`
+	Limit   int      `json:"limit"`
+	Event   string   `json:"event"`
+}
+
+// APIKeyListParams are query params for List.
+type APIKeyListParams struct {
+	Page    *int
+	Limit   *int
+	Enabled *bool
+	UserID  *string
+	Q       *string
+}
+
+// DeleteAPIKeyResponse is returned by Delete.
+type DeleteAPIKeyResponse struct {
+	ID      string `json:"id"`
+	Message string `json:"message"`
+	Object  string `json:"object"`
+	Event   string `json:"event"`
+}
+
+// CreateAPIKeyParams creates an API key.
+type CreateAPIKeyParams struct {
+	Name string `json:"name"`
+}
+
+// UpdateAPIKeyParams updates an API key.
+type UpdateAPIKeyParams struct {
+	Name string `json:"name"`
+}
+
+// Create creates an API key.
+func (s *APIKeyService) Create(params CreateAPIKeyParams) (*APIKeyWithKey, error) {
+	name, err := requireAPIKeyName(params.Name, "name")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out APIKeyWithKey
+	if err := s.client.do("POST", "/api/api-key/v1/", map[string]string{"name": name}, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) List(params *ApiKeyListParams) (*ApiKeyListResponse, error) {
-	query := url.Values{}
+const apiKeyV1 = "/api/api-key/v1"
+
+// List lists API keys.
+func (s *APIKeyService) List(params *APIKeyListParams) (*APIKeyListResponse, error) {
+	q := url.Values{}
 	if params != nil {
 		if params.Page != nil {
-			query.Add("page", fmt.Sprintf("%d", *params.Page))
+			if err := requirePage(*params.Page, "page"); err != nil {
+				return nil, err
+			}
+			q.Set("page", strconv.Itoa(*params.Page))
 		}
 		if params.Limit != nil {
-			query.Add("limit", fmt.Sprintf("%d", *params.Limit))
+			if err := requireLimit(*params.Limit, 1, 100, "limit"); err != nil {
+				return nil, err
+			}
+			q.Set("limit", strconv.Itoa(*params.Limit))
 		}
 		if params.Enabled != nil {
-			query.Add("enabled", fmt.Sprintf("%t", *params.Enabled))
+			q.Set("enabled", strconv.FormatBool(*params.Enabled))
 		}
 		if params.UserID != nil {
-			query.Add("userId", *params.UserID)
+			q.Set("userId", *params.UserID)
 		}
 		if params.Q != nil {
-			query.Add("q", *params.Q)
+			q.Set("q", *params.Q)
 		}
 	}
-
-	path := "/api/api-key/v1/"
-	if len(query) > 0 {
-		path = path + "?" + query.Encode()
+	var out APIKeyListResponse
+	if err := s.client.do("GET", apiKeyV1+"/", nil, q, &out); err != nil {
+		return nil, err
 	}
+	return &out, nil
+}
 
-	var response ApiKeyListResponse
-	err := s.client.request("GET", path, nil, &response)
+// Get fetches an API key by ID.
+func (s *APIKeyService) Get(apiKeyID string) (*APIKey, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out APIKey
+	if err := s.client.do("GET", apiKeyV1+"/"+id, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) Get(id string) (*ApiKey, error) {
-	var response ApiKey
-	err := s.client.request("GET", fmt.Sprintf("/api/api-key/v1/%s", id), nil, &response)
+// Update updates an API key.
+func (s *APIKeyService) Update(apiKeyID string, params UpdateAPIKeyParams) (*APIKey, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
-}
-
-func (s *ApiKeysService) Update(id string, params UpdateApiKeyParams) (*ApiKey, error) {
-	var response ApiKey
-	err := s.client.request("PATCH", fmt.Sprintf("/api/api-key/v1/%s", id), params, &response)
+	name, err := requireAPIKeyName(params.Name, "name")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out APIKey
+	if err := s.client.do("PATCH", apiKeyV1+"/"+id, map[string]string{"name": name}, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) Delete(id string) (*DeleteApiKeyResponse, error) {
-	var response DeleteApiKeyResponse
-	err := s.client.request("DELETE", fmt.Sprintf("/api/api-key/v1/%s", id), nil, &response)
+// Delete deletes an API key.
+func (s *APIKeyService) Delete(apiKeyID string) (*DeleteAPIKeyResponse, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out DeleteAPIKeyResponse
+	if err := s.client.do("DELETE", apiKeyV1+"/"+id, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) Rotate(id string) (*ApiKeyWithKey, error) {
-	var response ApiKeyWithKey
-	err := s.client.request("POST", fmt.Sprintf("/api/api-key/v1/rotate/%s", id), nil, &response)
+// Rotate rotates an API key secret.
+func (s *APIKeyService) Rotate(apiKeyID string) (*APIKeyWithKey, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out APIKeyWithKey
+	if err := s.client.do("POST", apiKeyV1+"/rotate/"+id, map[string]interface{}{}, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) Enable(id string) (*ApiKey, error) {
-	var response ApiKey
-	err := s.client.request("POST", fmt.Sprintf("/api/api-key/v1/enable/%s", id), nil, &response)
+// Enable enables an API key.
+func (s *APIKeyService) Enable(apiKeyID string) (*APIKey, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
+	var out APIKey
+	if err := s.client.do("POST", apiKeyV1+"/enable/"+id, map[string]interface{}{}, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
-func (s *ApiKeysService) Disable(id string) (*ApiKey, error) {
-	var response ApiKey
-	err := s.client.request("POST", fmt.Sprintf("/api/api-key/v1/disable/%s", id), nil, &response)
+// Disable disables an API key.
+func (s *APIKeyService) Disable(apiKeyID string) (*APIKey, error) {
+	id, err := requireAPIKeyID(apiKeyID, "apiKeyId")
 	if err != nil {
 		return nil, err
 	}
-	return &response, nil
-}
-
-func (s *ApiKeysService) Pause(id string) (*ApiKey, error) {
-	return s.Disable(id)
+	var out APIKey
+	if err := s.client.do("POST", apiKeyV1+"/disable/"+id, map[string]interface{}{}, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
