@@ -208,6 +208,14 @@ type SendMailTag struct {
 	Value string `json:"value"`
 }
 
+type SendMailAttachment struct {
+	Content     interface{} `json:"content,omitempty"`
+	Filename    *string     `json:"filename,omitempty"`
+	Path        *string     `json:"path,omitempty"`
+	ContentType *string     `json:"content_type,omitempty"`
+	ContentID   *string     `json:"content_id,omitempty"`
+}
+
 type SendMailTemplate struct {
 	ID        string                 `json:"id"`
 	Variables map[string]interface{} `json:"variables,omitempty"`
@@ -224,8 +232,9 @@ type SendMailParams struct {
 	ReplyTo     interface{}       `json:"reply_to,omitempty"`
 	ScheduledAt *string           `json:"scheduled_at,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
-	ChannelID   *string           `json:"channel_id,omitempty"`
-	Tags        []SendMailTag     `json:"tags,omitempty"`
+	ChannelID   *string              `json:"channel_id,omitempty"`
+	Attachments []SendMailAttachment `json:"attachments,omitempty"`
+	Tags        []SendMailTag        `json:"tags,omitempty"`
 	Template    *SendMailTemplate `json:"template,omitempty"`
 	ThreadID    *string           `json:"thread_id,omitempty"`
 }
