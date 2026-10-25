@@ -116,7 +116,7 @@ func TestVerifyWebhookRejectsMalformedSignatureHeader(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected WebhookSignatureVerificationError, got %T", err)
 	}
-	if !strings.Contains(sigErr.Message, "Invalid X-Webhook-Signature") {
+	if !strings.Contains(sigErr.Message, "Invalid Reloop-Signature") {
 		t.Fatalf("message = %q", sigErr.Message)
 	}
 }
@@ -150,7 +150,7 @@ func TestVerifyWebhookRejectsMissingSignatureHeader(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected WebhookSignatureVerificationError, got %T", err)
 	}
-	if !strings.Contains(strings.ToLower(sigErr.Message), "missing x-webhook-signature") {
+	if !strings.Contains(strings.ToLower(sigErr.Message), "missing reloop-signature") {
 		t.Fatalf("message = %q", sigErr.Message)
 	}
 }
@@ -163,5 +163,59 @@ func TestVerifyWebhookRejectsMissingSecret(t *testing.T) {
 	})
 	if _, ok := err.(*WebhookSignatureVerificationError); !ok {
 		t.Fatalf("expected WebhookSignatureVerificationError, got %T", err)
+	}
+}
+
+// productionWebhookPayload matches the envelope Reloop actually sends.
+var productionWebhookPayload = []byte(`{"id":"whev_01abc","type":"email.received","created_at":"2026-10-26T12:00:00.000Z","data":{"email_id":"in_1","subject":"Hello"}}`)
+
+func TestVerifyWebhookAcceptsProductionDelivery(t *testing.T) {
+	if WebhookSignatureHeader != "Reloop-Signature" {
+		t.Fatalf("WebhookSignatureHeader = %q", WebhookSignatureHeader)
+	}
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	header := signWebhookPayload(testWebhookSecret, timestamp, productionWebhookPayload)
+
+	event, err := VerifyWebhook(VerifyWebhookParams{
+		Payload: productionWebhookPayload,
+		Headers: map[string]string{
+			"reloop-signature": header,
+			"reloop-timestamp": timestamp,
+			"reloop-id":        "whev_01abc",
+		},
+		Secret: testWebhookSecret,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.ID != "whev_01abc" || event.Type != "email.received" || event.CreatedAt != "2026-10-26T12:00:00.000Z" {
+		t.Fatalf("event = %#v", event)
+	}
+	if event.Data["subject"] != "Hello" || event.Event != event.Type || event.Payload["subject"] != "Hello" {
+		t.Fatalf("event data = %#v", event)
+	}
+}
+
+func TestVerifyWebhookAcceptsLegacyHeader(t *testing.T) {
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	header := signWebhookPayload(testWebhookSecret, timestamp, productionWebhookPayload)
+
+	event, err := VerifyWebhook(VerifyWebhookParams{
+		Payload: productionWebhookPayload,
+		Headers: map[string]string{"x-webhook-signature": header},
+		Secret:  testWebhookSecret,
+	})
+	if err != nil || event.Type != "email.received" {
+		t.Fatalf("event = %#v, err = %v", event, err)
+	}
+}
+
+func TestVerifyWebhookRejectsTamperedProductionBody(t *testing.T) {
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	header := signWebhookPayload(testWebhookSecret, timestamp, productionWebhookPayload)
+	tampered := []byte(strings.Replace(string(productionWebhookPayload), "Hello", "Hacked", 1))
+
+	if _, err := ConstructEvent(tampered, header, testWebhookSecret, 0); err == nil {
+		t.Fatal("expected verification error")
 	}
 }

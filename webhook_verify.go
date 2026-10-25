@@ -12,10 +12,15 @@ import (
 )
 
 const (
-	// WebhookSignatureHeader is the HTTP header carrying the signed payload.
-	WebhookSignatureHeader = "x-webhook-signature"
-	// WebhookTimestampHeader is the HTTP header carrying the event timestamp.
-	WebhookTimestampHeader = "x-webhook-timestamp"
+	// WebhookSignatureHeader is the header Reloop signs deliveries with: t=<unix>,v1=<hex>.
+	WebhookSignatureHeader = "Reloop-Signature"
+	// WebhookTimestampHeader carries the Unix timestamp used in the signature.
+	WebhookTimestampHeader = "Reloop-Timestamp"
+	// WebhookIDHeader carries the event id, the same as the body "id".
+	WebhookIDHeader = "Reloop-Id"
+
+	// legacyWebhookSignatureHeader was used before 2.0.1. Still accepted as a fallback.
+	legacyWebhookSignatureHeader = "x-webhook-signature"
 
 	defaultWebhookToleranceSeconds = 300
 )
@@ -33,12 +38,19 @@ func webhookSigErr(message string) *WebhookSignatureVerificationError {
 	return &WebhookSignatureVerificationError{Message: message}
 }
 
-// WebhookEvent is a verified webhook payload.
+// WebhookEvent is a verified webhook delivery: {id, type, created_at, data}.
 type WebhookEvent struct {
 	ID        string                 `json:"id"`
-	Event     string                 `json:"event"`
-	Payload   map[string]interface{} `json:"payload"`
-	Timestamp float64                `json:"timestamp"`
+	Type      string                 `json:"type"`
+	CreatedAt string                 `json:"created_at"`
+	Data      map[string]interface{} `json:"data"`
+
+	// Deprecated: use Type.
+	Event string `json:"-"`
+	// Deprecated: use Data.
+	Payload map[string]interface{} `json:"-"`
+	// Deprecated: use CreatedAt. Unix seconds.
+	Timestamp float64 `json:"-"`
 }
 
 // VerifyWebhookParams configures webhook signature verification.
@@ -76,7 +88,7 @@ func parseSignatureHeader(header string) (timestamp string, signatures []string,
 		}
 	}
 	if timestamp == "" || len(signatures) == 0 {
-		return "", nil, webhookSigErr("Invalid X-Webhook-Signature header: expected t= and v1= values")
+		return "", nil, webhookSigErr("Invalid " + WebhookSignatureHeader + " header: expected t= and v1= values")
 	}
 	return timestamp, signatures, nil
 }
@@ -104,7 +116,7 @@ func isFinite(v float64) bool {
 func verifyWebhookTimestamp(timestamp string, tolerance int) error {
 	ts, err := strconv.ParseFloat(timestamp, 64)
 	if err != nil || !isFinite(ts) {
-		return webhookSigErr("Invalid timestamp in X-Webhook-Signature header")
+		return webhookSigErr("Invalid timestamp in " + WebhookSignatureHeader + " header")
 	}
 	age := math.Abs(float64(time.Now().Unix()) - math.Floor(ts))
 	if int(age) > tolerance {
@@ -113,9 +125,9 @@ func verifyWebhookTimestamp(timestamp string, tolerance int) error {
 	return nil
 }
 
-func parseWebhookEvent(raw string) (*WebhookEvent, error) {
+func parseWebhookEvent(raw []byte) (*WebhookEvent, error) {
 	var record map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &record); err != nil {
+	if err := json.Unmarshal(raw, &record); err != nil {
 		return nil, webhookSigErr("Webhook payload is not valid JSON")
 	}
 	if record == nil {
@@ -126,24 +138,49 @@ func parseWebhookEvent(raw string) (*WebhookEvent, error) {
 	if id == "" {
 		return nil, webhookSigErr("Webhook payload missing required field: id")
 	}
-	event, _ := record["event"].(string)
-	if event == "" {
-		return nil, webhookSigErr("Webhook payload missing required field: event")
+
+	// Production envelope: {id, type, created_at, data}.
+	// Legacy envelope (pre-2.0.1 fixtures): {id, event, payload, timestamp}.
+	eventType, _ := record["type"].(string)
+	if eventType == "" {
+		eventType, _ = record["event"].(string)
 	}
-	payload, ok := record["payload"].(map[string]interface{})
-	if !ok || payload == nil {
-		return nil, webhookSigErr("Webhook payload missing required field: payload")
+	if eventType == "" {
+		return nil, webhookSigErr("Webhook payload missing required field: type")
 	}
-	ts, ok := record["timestamp"].(float64)
-	if !ok || !isFinite(ts) {
-		return nil, webhookSigErr("Webhook payload missing required field: timestamp")
+
+	data, ok := record["data"].(map[string]interface{})
+	if !ok {
+		data, ok = record["payload"].(map[string]interface{})
+	}
+	if !ok || data == nil {
+		return nil, webhookSigErr("Webhook payload missing required field: data")
+	}
+
+	var createdAt string
+	var unix float64
+	if s, _ := record["created_at"].(string); s != "" {
+		t, err := time.Parse(time.RFC3339Nano, s)
+		if err != nil {
+			return nil, webhookSigErr("Webhook payload has an invalid created_at")
+		}
+		createdAt = s
+		unix = float64(t.UnixMilli()) / 1000
+	} else if ts, ok := record["timestamp"].(float64); ok && isFinite(ts) {
+		unix = ts
+		createdAt = time.UnixMilli(int64(ts * 1000)).UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	} else {
+		return nil, webhookSigErr("Webhook payload missing required field: created_at")
 	}
 
 	return &WebhookEvent{
 		ID:        id,
-		Event:     event,
-		Payload:   payload,
-		Timestamp: ts,
+		Type:      eventType,
+		CreatedAt: createdAt,
+		Data:      data,
+		Event:     eventType,
+		Payload:   data,
+		Timestamp: unix,
 	}, nil
 }
 
@@ -159,6 +196,9 @@ func VerifyWebhook(params VerifyWebhookParams) (*WebhookEvent, error) {
 	}
 
 	signatureHeader, ok := getWebhookHeader(params.Headers, WebhookSignatureHeader)
+	if !ok || signatureHeader == "" {
+		signatureHeader, ok = getWebhookHeader(params.Headers, legacyWebhookSignatureHeader)
+	}
 	if !ok || signatureHeader == "" {
 		return nil, webhookSigErr("Missing " + WebhookSignatureHeader + " header")
 	}
@@ -183,7 +223,7 @@ func VerifyWebhook(params VerifyWebhookParams) (*WebhookEvent, error) {
 		return nil, webhookSigErr("Webhook signature verification failed")
 	}
 
-	return parseWebhookEvent(string(params.Payload))
+	return parseWebhookEvent(params.Payload)
 }
 
 // ConstructEvent verifies a webhook signature from raw payload bytes and header value.

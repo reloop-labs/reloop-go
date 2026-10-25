@@ -79,8 +79,11 @@ Idiomatic Go `(T, error)` returns — the Go equivalent of Node/Python Result ob
 ## Webhook verification
 
 ```go
+// payload: the raw request body; signature: r.Header.Get(reloop.WebhookSignatureHeader)
 event, err := reloop.ConstructEvent(payload, signature, secret, 300)
 // or client.Webhook.Verify(reloop.VerifyWebhookParams{...})
+
+// event.Type, event.CreatedAt, event.Data
 ```
 
 ## License

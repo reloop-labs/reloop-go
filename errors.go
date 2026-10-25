@@ -1,6 +1,9 @@
 package reloop
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // ValidationError is returned when client arguments are invalid (no HTTP call).
 type ValidationError struct {
@@ -12,12 +15,29 @@ func (e *ValidationError) Error() string {
 	return e.Message
 }
 
-// APIErrorBody is the decoded Reloop error payload.
+// APIErrorBody is the decoded Reloop error payload: message, why, fix, link.
 type APIErrorBody struct {
 	Message string `json:"message,omitempty"`
 	Why     string `json:"why,omitempty"`
-	Tip     string `json:"tip,omitempty"`
+	Fix     string `json:"fix,omitempty"`
 	Link    string `json:"link,omitempty"`
+	// Deprecated: the API returns "fix". Tip mirrors Fix.
+	Tip string `json:"tip,omitempty"`
+}
+
+// UnmarshalJSON reads "fix" (and the legacy "tip") into both Fix and Tip.
+func (b *APIErrorBody) UnmarshalJSON(data []byte) error {
+	type rawBody APIErrorBody
+	var raw rawBody
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*b = APIErrorBody(raw)
+	if b.Fix == "" {
+		b.Fix = b.Tip
+	}
+	b.Tip = b.Fix
+	return nil
 }
 
 // APIError is returned for non-2xx HTTP responses and network failures.
